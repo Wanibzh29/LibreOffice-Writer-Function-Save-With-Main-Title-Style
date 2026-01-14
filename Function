@@ -1,0 +1,95 @@
+Sub SaveWithMainTitleStyle_Dialog
+    Dim oDoc As Object
+    Dim sTitle As String
+    Dim sDate As String
+    Dim sFullName As String
+    
+    oDoc = ThisComponent
+    
+    ' Recherche dans le texte principal
+    sTitle = FindTitleInText(oDoc.Text)
+    
+    ' Recherche dans les cadres si non trouvé
+    If sTitle = "" Then
+        Dim oTextFrames As Object, oFrame As Object
+        oTextFrames = oDoc.TextFrames
+        
+        For Each oFrame In oTextFrames
+            sTitle = FindTitleInText(oFrame.Text)
+            If sTitle <> "" Then Exit For
+        Next
+    End If
+    
+    If sTitle = "" Then
+        MsgBox "Aucun texte avec le style 'Title' trouvé.", 48, "Erreur"
+        Exit Sub
+    End If
+    
+    ' Nettoyage du titre
+    sTitle = ReplaceInvalidFileChars(sTitle)
+    
+    ' Transformation en nom de fichier (slug simple)
+    sTitle = Trim(sTitle)
+    sTitle = Replace(sTitle, " ", "-")
+    
+    ' Contrôle de longueur
+    If Len(sTitle) > 100 Then
+        MsgBox "Le titre est trop long (" & Len(sTitle) & " caractères)." & Chr(10) _
+            & "Veuillez réduire le texte du 'Titre principal'.", 48, "Titre trop long"
+        Exit Sub
+    End If
+    
+    ' Ajout de la date
+    sDate = Format(Now(), "YYYY-MM-DD")
+    sFullName = sDate & "-" & sTitle & ".odt"
+    
+    ' --- Dialogue de sauvegarde ---
+    Dim filePicker As Object
+    filePicker = CreateUnoService("com.sun.star.ui.dialogs.FilePicker")
+    
+    filePicker.Initialize(Array(com.sun.star.ui.dialogs.TemplateDescription.FILESAVE_AUTOEXTENSION))
+    filePicker.AppendFilter("OpenDocument Texte", "*.odt")
+    filePicker.SetDefaultName(sFullName)
+    
+    If filePicker.Execute() = 1 Then
+        Dim sPath As String
+        sPath = filePicker.Files(0)
+        
+        If Right(LCase(sPath), 4) <> ".odt" Then
+            sPath = sPath & ".odt"
+        End If
+        
+        sPath = ConvertToURL(sPath)
+        oDoc.storeAsURL(sPath, Array())
+        MsgBox "Document enregistré sous :" & Chr(10) & sPath, 64, "Succès"
+    Else
+        MsgBox "Enregistrement annulé.", 48, "Annulé"
+    End If
+End Sub
+
+
+Function FindTitleInText(oText As Object) As String
+    Dim oEnum As Object, oPar As Object
+    
+    oEnum = oText.createEnumeration()
+    While oEnum.hasMoreElements()
+        oPar = oEnum.nextElement()
+        If oPar.supportsService("com.sun.star.text.Paragraph") Then
+            If oPar.ParaStyleName = "Title" Then
+                FindTitleInText = oPar.String
+                Exit Function
+            End If
+        End If
+    Wend
+    FindTitleInText = ""
+End Function
+
+
+Function ReplaceInvalidFileChars(sName As String) As String
+    Dim aChars As Variant, i As Integer
+    aChars = Array("/", "\", ":", "*", "?", """", "<", ">", "|")
+    For i = LBound(aChars) To UBound(aChars)
+        sName = Replace(sName, aChars(i), "-")
+    Next i
+    ReplaceInvalidFileChars = sName
+End Function
